@@ -1,0 +1,14 @@
+#!/usr/bin/env bb
+
+(require '[leinpad.core :as leinpad])
+
+(leinpad/main {})
+
+;; Customize with pre/post steps and options:
+;;
+;; (leinpad/main
+;;   {:profiles [:dev :test]
+;;    :nrepl-port 7888
+;;    :go true
+;;    :pre-steps [my-docker-step]
+;;    :post-steps [my-post-step]})

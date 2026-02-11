@@ -1,0 +1,6 @@
+{:deps {io.github.ovistoica/leinpad {:local/root "../"}}
+
+ :tasks
+ {leinpad {:doc "Start development REPL"
+           :requires ([leinpad.core :as leinpad])
+           :task (leinpad/main {})}}}

@@ -1,0 +1,6 @@
+/target/
+/.nrepl-port
+/.cpcache/
+/.lsp/
+/.clj-kondo/
+leinpad.local.edn
