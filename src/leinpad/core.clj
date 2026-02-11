@@ -155,8 +155,7 @@
    :shadow-cljs false
    :shadow-build-ids [:app]
    :shadow-connect-ids []
-   :extra-deps []
-   :extra-plugins []})
+   :extra-deps []})
 
 (defn- load-config-file [filename]
   (if (fs/exists? filename)
@@ -173,14 +172,11 @@
                                              (or (:leinpad/profiles b) []))))
         merged-deps (vec (distinct (into (or (:leinpad/extra-deps a) [])
                                          (or (:leinpad/extra-deps b) []))))
-        merged-plugins (vec (distinct (into (or (:leinpad/extra-plugins a) [])
-                                            (or (:leinpad/extra-plugins b) []))))
         merged-main-opts (or (:leinpad/main-opts b) (:leinpad/main-opts a))]
     (cond-> {}
       (seq merged-opts) (assoc :leinpad/options merged-opts)
       (seq merged-profiles) (assoc :leinpad/profiles merged-profiles)
       (seq merged-deps) (assoc :leinpad/extra-deps merged-deps)
-      (seq merged-plugins) (assoc :leinpad/extra-plugins merged-plugins)
       merged-main-opts (assoc :leinpad/main-opts merged-main-opts))))
 
 (defn read-lein-config
@@ -203,9 +199,6 @@
 
                  (:leinpad/extra-deps leinpad-config)
                  (update :extra-deps #(vec (distinct (into (or % []) (:leinpad/extra-deps leinpad-config)))))
-
-                 (:leinpad/extra-plugins leinpad-config)
-                 (update :extra-plugins #(vec (distinct (into (or % []) (:leinpad/extra-plugins leinpad-config)))))
 
                  (:leinpad/main-opts leinpad-config)
                  (update :main-opts #(or % (:leinpad/main-opts leinpad-config))))]
@@ -323,7 +316,7 @@
    shadow-cljs dependencies/plugins at startup."
   [{:keys [nrepl-port nrepl-bind profiles cider-nrepl refactor-nrepl shadow-cljs
            nrepl-version cider-nrepl-version refactor-nrepl-version shadow-cljs-version
-           extra-deps extra-plugins]
+           extra-deps]
     :or {nrepl-version default-nrepl-version
          cider-nrepl-version default-cider-nrepl-version
          refactor-nrepl-version default-refactor-nrepl-version
@@ -373,14 +366,6 @@
                       (into c ["update-in" ":dependencies" "conj"
                                (format "[%s \"%s\"]" lib ver) "--"]))
                     cmd extra-deps))
-
-      ;; Extra plugins from leinpad config
-      (seq extra-plugins)
-      (as-> cmd
-            (reduce (fn [c [lib ver]]
-                      (into c ["update-in" ":plugins" "conj"
-                               (format "[%s \"%s\"]" lib ver) "--"]))
-                    cmd extra-plugins))
 
       ;; Start headless repl
       true
