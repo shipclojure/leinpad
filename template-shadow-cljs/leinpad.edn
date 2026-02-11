@@ -1,4 +1,2 @@
-{:profiles [:dev]
- :shadow-cljs true
- :shadow-build-ids [:app]
- :clean true}
+{:leinpad/options {:shadow-cljs true :clean true}
+ :leinpad/profiles [:dev]}

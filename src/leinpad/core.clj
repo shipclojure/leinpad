@@ -154,7 +154,9 @@
    :refactor-nrepl false
    :shadow-cljs false
    :shadow-build-ids [:app]
-   :shadow-connect-ids []})
+   :shadow-connect-ids []
+   :extra-deps []
+   :extra-plugins []})
 
 (defn- load-config-file [filename]
   (if (fs/exists? filename)
@@ -162,32 +164,51 @@
         (edn/read-string (slurp filename)))
     {}))
 
+(defn- merge-leinpad-configs
+  "Merge two leinpad config maps (with :leinpad/ namespaced keys).
+   :leinpad/options are deep-merged. Collection keys are combined with distinct."
+  [a b]
+  (let [merged-opts (merge (:leinpad/options a) (:leinpad/options b))
+        merged-profiles (vec (distinct (into (or (:leinpad/profiles a) [])
+                                             (or (:leinpad/profiles b) []))))
+        merged-deps (vec (distinct (into (or (:leinpad/extra-deps a) [])
+                                         (or (:leinpad/extra-deps b) []))))
+        merged-plugins (vec (distinct (into (or (:leinpad/extra-plugins a) [])
+                                            (or (:leinpad/extra-plugins b) []))))
+        merged-main-opts (or (:leinpad/main-opts b) (:leinpad/main-opts a))]
+    (cond-> {}
+      (seq merged-opts) (assoc :leinpad/options merged-opts)
+      (seq merged-profiles) (assoc :leinpad/profiles merged-profiles)
+      (seq merged-deps) (assoc :leinpad/extra-deps merged-deps)
+      (seq merged-plugins) (assoc :leinpad/extra-plugins merged-plugins)
+      merged-main-opts (assoc :leinpad/main-opts merged-main-opts))))
+
 (defn read-lein-config
-  "Read leinpad.edn + leinpad.local.edn, merge with defaults and ctx."
+  "Read leinpad.edn + leinpad.local.edn, merge with defaults and ctx.
+   Both files use the same :leinpad/ namespaced format."
   [ctx]
   (let [project-root (:project-root ctx (System/getProperty "user.dir"))
-        config-file (str (fs/path project-root "leinpad.edn"))
-        local-file (str (fs/path project-root "leinpad.local.edn"))
-        file-config (load-config-file config-file)
-        local-config (load-config-file local-file)
-        ;; Extract leinpad-namespaced keys from local config
-        local-opts (:leinpad/options local-config)
-        local-profiles (:leinpad/profiles local-config)
-        local-main-opts (:leinpad/main-opts local-config)
-        local-extra-deps (:leinpad/extra-deps local-config)
-        local-extra-plugins (:leinpad/extra-plugins local-config)
-        ;; Merge configs: defaults < file < local-opts < ctx (programmatic opts)
-        merged (merge default-config file-config local-opts ctx)
-        ;; Merge profiles from local config
-        merged (if local-profiles
-                 (update merged :profiles into local-profiles)
-                 merged)
-        ;; Store extra deps/plugins from local config
+        file-config (load-config-file (str (fs/path project-root "leinpad.edn")))
+        local-config (load-config-file (str (fs/path project-root "leinpad.local.edn")))
+        ;; Merge the two leinpad config files
+        leinpad-config (merge-leinpad-configs file-config local-config)
+        ;; Build the flat ctx: defaults < options from files < programmatic ctx
+        merged (merge default-config
+                      (:leinpad/options leinpad-config)
+                      ctx)
+        ;; Merge collection keys
         merged (cond-> merged
-                 local-extra-deps (assoc :local-extra-deps local-extra-deps)
-                 local-extra-plugins (assoc :local-extra-plugins local-extra-plugins)
-                 local-main-opts (update :main-opts #(or % local-main-opts)))]
-    ;; Auto-enable middleware when emacs is enabled
+                 (:leinpad/profiles leinpad-config)
+                 (update :profiles #(vec (distinct (into (or % []) (:leinpad/profiles leinpad-config)))))
+
+                 (:leinpad/extra-deps leinpad-config)
+                 (update :extra-deps #(vec (distinct (into (or % []) (:leinpad/extra-deps leinpad-config)))))
+
+                 (:leinpad/extra-plugins leinpad-config)
+                 (update :extra-plugins #(vec (distinct (into (or % []) (:leinpad/extra-plugins leinpad-config)))))
+
+                 (:leinpad/main-opts leinpad-config)
+                 (update :main-opts #(or % (:leinpad/main-opts leinpad-config))))]
     (cond-> merged
       (:emacs merged) (assoc :cider-nrepl true :refactor-nrepl true)
       (:vs-code merged) (assoc :cider-nrepl true))))
@@ -302,7 +323,7 @@
    shadow-cljs dependencies/plugins at startup."
   [{:keys [nrepl-port nrepl-bind profiles cider-nrepl refactor-nrepl shadow-cljs
            nrepl-version cider-nrepl-version refactor-nrepl-version shadow-cljs-version
-           local-extra-deps local-extra-plugins]
+           extra-deps extra-plugins]
     :or {nrepl-version default-nrepl-version
          cider-nrepl-version default-cider-nrepl-version
          refactor-nrepl-version default-refactor-nrepl-version
@@ -345,21 +366,21 @@
       (into ["update-in" ":repl-options:nrepl-middleware" "conj"
              "shadow.cljs.devtools.server.nrepl/middleware" "--"])
 
-      ;; Extra deps from leinpad.local.edn
-      (seq local-extra-deps)
+      ;; Extra deps from leinpad config
+      (seq extra-deps)
       (as-> cmd
             (reduce (fn [c [lib ver]]
                       (into c ["update-in" ":dependencies" "conj"
                                (format "[%s \"%s\"]" lib ver) "--"]))
-                    cmd local-extra-deps))
+                    cmd extra-deps))
 
-      ;; Extra plugins from leinpad.local.edn
-      (seq local-extra-plugins)
+      ;; Extra plugins from leinpad config
+      (seq extra-plugins)
       (as-> cmd
             (reduce (fn [c [lib ver]]
                       (into c ["update-in" ":plugins" "conj"
                                (format "[%s \"%s\"]" lib ver) "--"]))
-                    cmd local-extra-plugins))
+                    cmd extra-plugins))
 
       ;; Start headless repl
       true

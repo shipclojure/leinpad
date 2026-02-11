@@ -1,2 +1,2 @@
-{:profiles [:dev]
- :clean true}
+{:leinpad/options {:clean true}
+ :leinpad/profiles [:dev]}
