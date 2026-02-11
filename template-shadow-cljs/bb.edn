@@ -1,0 +1,8 @@
+{:deps {io.github.ovistoica/leinpad {:local/root "../"}}
+
+ :tasks
+ {leinpad {:doc "Start development REPL with shadow-cljs"
+           :requires ([leinpad.core :as leinpad])
+           :task (leinpad/main {:shadow-cljs true
+                                :shadow-build-ids [:app]
+                                :go true})}}}

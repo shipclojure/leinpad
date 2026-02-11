@@ -1,0 +1,13 @@
+#!/usr/bin/env bb
+
+(require '[leinpad.core :as leinpad])
+
+;; Shadow-cljs project: starts lein REPL with shadow-cljs middleware injected,
+;; then starts shadow-cljs builds via nREPL after the REPL is running.
+;;
+;; With --emacs, connects both CLJ and CLJS sibling REPLs to Emacs CIDER.
+
+(leinpad/main
+ {:shadow-cljs true
+  :shadow-build-ids [:app]
+  :go true})

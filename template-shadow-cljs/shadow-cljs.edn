@@ -1,0 +1,11 @@
+;; shadow-cljs config
+;; Dependencies and source paths are managed by project.clj (via lein integration)
+{:lein true
+
+ :builds
+ {:app {:target :browser
+        :output-dir "resources/public/js"
+        :asset-path "/js"
+        :modules {:main {:init-fn myapp.app/init}}
+        :devtools {:http-root "resources/public"
+                   :http-port 8080}}}}

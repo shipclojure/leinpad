@@ -1,0 +1,4 @@
+{:profiles [:dev]
+ :shadow-cljs true
+ :shadow-build-ids [:app]
+ :clean true}

@@ -1,0 +1,9 @@
+/target/
+/.nrepl-port
+/.cpcache/
+/.lsp/
+/.clj-kondo/
+/.shadow-cljs/
+/node_modules/
+/resources/public/js/
+leinpad.local.edn
