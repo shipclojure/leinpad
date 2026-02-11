@@ -1,5 +1,5 @@
 (ns leinpad.core
-  "A launchpad-inspired REPL launcher for Leiningen projects.
+  "A launchpad-inspired dev process launcher for Leiningen projects.
 
    Reuses lambdaisland/launchpad utilities (Emacs integration, nREPL wait,
    free-port, CLI handling, process management) and adds Leiningen-specific
@@ -134,6 +134,44 @@
         (log/warn "Failed to connect CLJS REPL:" (:err result))))))
 
 ;; ============================================================================
+;; Project dependency detection
+;; ============================================================================
+
+(defn- read-project-clj
+  "Read and parse project.clj, returning the defproject form as a map.
+   Returns nil if project.clj doesn't exist or can't be parsed."
+  [project-root]
+  (let [f (str (fs/path project-root "project.clj"))]
+    (when (fs/exists? f)
+      (try
+        (let [form (edn/read-string (slurp f))
+              ;; defproject name version & args
+              args (drop 3 form)]
+          (apply hash-map args))
+        (catch Exception e
+          (log/debug "Could not parse project.clj:" (.getMessage e))
+          nil)))))
+
+(defn- project-deps
+  "Extract all dependency artifact symbols from project.clj, including
+   dependencies from the given profiles. Returns a set of symbols."
+  [project-root profiles]
+  (when-let [project (read-project-clj project-root)]
+    (let [top-deps (map first (:dependencies project))
+          profile-deps (mapcat (fn [p]
+                                 (map first
+                                      (get-in project [:profiles p :dependencies])))
+                               profiles)]
+      (set (concat top-deps profile-deps)))))
+
+(defn- dep-in-project?
+  "Check if a dependency (as a symbol) is already declared in the project's
+   dependencies or active profile dependencies."
+  [ctx dep-sym]
+  (let [deps (project-deps (:project-root ctx) (:profiles ctx))]
+    (contains? deps dep-sym)))
+
+;; ============================================================================
 ;; Configuration
 ;; ============================================================================
 
@@ -242,7 +280,7 @@
           "--cider-connect" (recur rest-args (assoc opts :cider-connect true))
           "--no-cider-connect" (recur rest-args (assoc opts :cider-connect false))
           "--help" (do
-                     (println "leinpad - A launchpad-inspired REPL launcher for Leiningen projects")
+                     (println "leinpad - A launchpad-inspired dev process launcher for Leiningen projects")
                      (println)
                      (println "Options:")
                      (println "  --emacs              Connect Emacs CIDER after REPL starts")
@@ -313,10 +351,12 @@
 (defn build-lein-cmd
   "Build the lein command vector with runtime dependency injection.
    Uses `lein update-in` to inject nREPL, CIDER, refactor-nrepl, and
-   shadow-cljs dependencies/plugins at startup."
+   shadow-cljs dependencies/plugins at startup.
+   Skips injecting a dependency if the project already declares it."
   [{:keys [nrepl-port nrepl-bind profiles cider-nrepl refactor-nrepl shadow-cljs
            nrepl-version cider-nrepl-version refactor-nrepl-version shadow-cljs-version
-           extra-deps]
+           extra-deps project-root]
+    :as ctx
     :or {nrepl-version default-nrepl-version
          cider-nrepl-version default-cider-nrepl-version
          refactor-nrepl-version default-refactor-nrepl-version
@@ -325,7 +365,12 @@
         profiles (cond-> profiles
                    (and shadow-cljs (not (some #{:cljs} profiles)))
                    (conj :cljs))
-        profile-str (str/join "," (map name profiles))]
+        profile-str (str/join "," (map name profiles))
+        ;; Only inject shadow-cljs dep if not already in project
+        inject-shadow-dep (and shadow-cljs
+                               (not (dep-in-project? ctx 'thheller/shadow-cljs)))]
+    (when (and shadow-cljs (not inject-shadow-dep))
+      (log/info "shadow-cljs already in project dependencies, using project version"))
     (cond-> ["lein"]
       ;; with-profile must come before update-in
       (seq profile-str)
@@ -349,12 +394,12 @@
       (into ["update-in" ":plugins" "conj"
              (format "[refactor-nrepl/refactor-nrepl \"%s\"]" refactor-nrepl-version) "--"])
 
-      ;; Shadow-cljs dependency
-      shadow-cljs
+      ;; Shadow-cljs dependency (skip if already in project.clj)
+      inject-shadow-dep
       (into ["update-in" ":dependencies" "conj"
              (format "[thheller/shadow-cljs \"%s\"]" shadow-cljs-version) "--"])
 
-      ;; Shadow-cljs nREPL middleware
+      ;; Shadow-cljs nREPL middleware (always inject when shadow-cljs is enabled)
       shadow-cljs
       (into ["update-in" ":repl-options:nrepl-middleware" "conj"
              "shadow.cljs.devtools.server.nrepl/middleware" "--"])
@@ -488,7 +533,7 @@
   [ctx]
   (println)
   (println "========================================")
-  (println "leinpad - Leiningen REPL Launcher")
+  (println "leinpad - Leiningen Dev Process Launcher")
   (println "========================================")
   (println "nREPL:" (str (:nrepl-bind ctx) ":" (:nrepl-port ctx)))
   (println "Profiles:" (str/join ", " (map name (:profiles ctx))))

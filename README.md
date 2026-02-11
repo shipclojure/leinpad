@@ -1,25 +1,37 @@
 # Leinpad
 
-A launchpad-inspired REPL launcher for Leiningen projects.
+A launchpad-inspired dev process launcher for Leiningen projects.
 
-Leinpad is to Leiningen what [lambdaisland/launchpad](https://github.com/lambdaisland/launchpad) is to deps.edn. It starts from the same observations:
+Leinpad is to Leiningen what [lambdaisland/launchpad](https://github.com/lambdaisland/launchpad) is to deps.edn. It is a dev process launcher that orchestrates everything needed to get a local development environment running: starting services, configuring nREPL middleware, injecting dev dependencies, connecting your editor, and calling your system's `go` function. One command, consistent setup across the whole team.
+
+It starts from these observations:
 
 - Clojure development is done interactively
-- This requires an nREPL connection between a Clojure process and an editor
-- How the REPL gets started varies by editor, project, and individual preferences
+- This requires a nREPL connection between a Clojure process and an editor
+- How Clojure/nREPL gets started varies by
+  - editor (which middleware to include?)
+  - project (how to start the system, cljs config)
+  - individual (preferences in tooling, local roots)
+- We mainly rely on our editors to launch Clojure/nREPL because it is tedious
+- Other tools could benefit from participating in the startup sequence (e.g. lambdaisland/classpath)
+- Automating startup is done in an editor-specific way (.dir-locals.el, calva.replConnectSequences)
+- And requires copying boilerplate around (user.clj)
+
+And these preferences:
+
 - We want project setup to be self-contained, so starting a process "just works"
 - This should work for everyone on the team, no matter what editor they use
 - We prefer running the process in a terminal for cleaner separation and control
 
 ## How it works
 
-Leinpad is a babashka-compatible library. Through a number of steps it builds up a `lein` command line invocation, using `lein update-in` to inject nREPL, CIDER, refactor-nrepl, and shadow-cljs dependencies at startup without modifying your `project.clj`.
+Leinpad is a babashka-compatible library. Through a configurable pipeline of steps it orchestrates your entire dev startup: running custom setup (Docker services, migrations, environment checks), building a `lein` command with injected nREPL/CIDER/refactor-nrepl/shadow-cljs dependencies via `lein update-in`, starting the REPL, and performing post-startup tasks (connecting your editor, starting shadow-cljs builds, calling `(user/go)`) -- all without modifying your `project.clj`.
 
 It takes information from `leinpad.edn` (checked in) and `leinpad.local.edn` (not checked in) and arguments passed on the command line to determine which profiles to activate, which middleware to add to nREPL, which shadow-cljs builds to start, and extra dependencies to inject.
 
 ## Project setup
 
-See `template` for an example setup. You need a few pieces:
+See `template-*` for an example setup. You need a few pieces:
 
 ### `bb.edn`
 
@@ -55,7 +67,7 @@ A recognizable entry point for your project. This is a simple babashka script in
 
 ### `leinpad.edn`
 
-Project-level configuration, checked into version control. Uses `:leinpad/` namespaced keys.
+Project-level configuration, checked into version control.
 
 ```clojure
 {:leinpad/options {:clean true}
@@ -86,12 +98,12 @@ echo leinpad.local.edn >> .gitignore
 
 Both `leinpad.edn` and `leinpad.local.edn` use the same format with these keys:
 
-| Key | Type | Description |
-|-----|------|-------------|
-| `:leinpad/options` | map | CLI-style options (`:emacs`, `:verbose`, `:clean`, `:go`, etc.) |
-| `:leinpad/profiles` | vector | Lein profiles to activate |
-| `:leinpad/extra-deps` | vector | Extra dependencies injected via `lein update-in` |
-| `:leinpad/main-opts` | vector | Default CLI args (e.g. `["--emacs" "--go"]`) |
+| Key                   | Type   | Description                                                     |
+|-----------------------|--------|-----------------------------------------------------------------|
+| `:leinpad/options`    | map    | CLJ-style options (`:emacs`, `:verbose`, `:clean`, `:go`, etc.) |
+| `:leinpad/profiles`   | vector | Lein profiles to activate                                       |
+| `:leinpad/extra-deps` | vector | Extra dependencies injected via `lein update-in`                |
+| `:leinpad/main-opts`  | vector | Default CLI args (cli version of `:leinpad/options`) (e.g. `["--emacs" "--go"]`)                    |
 
 ### Merge strategy
 
@@ -120,7 +132,7 @@ Pass flags on the command line to override configuration:
 
 ```
 bb leinpad --help
-leinpad - A launchpad-inspired REPL launcher for Leiningen projects
+leinpad - A launchpad-inspired dev process launcher for Leiningen projects
 
 Options:
   --emacs              Connect Emacs CIDER after REPL starts
