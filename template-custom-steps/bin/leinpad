@@ -1,0 +1,15 @@
+#!/usr/bin/env bb
+
+(require '[leinpad.core :as leinpad]
+         '[babashka.process :as p])
+
+;; Custom step: ensure Docker services are running before starting the REPL
+(defn docker-up [ctx]
+  (println "Starting Docker services...")
+  @(p/process ["docker" "compose" "up" "-d"]
+              {:out :inherit :err :inherit
+               :dir (:project-root ctx)})
+  (println "Docker services started.")
+  ctx)
+
+(leinpad/main {:pre-steps [docker-up]})

@@ -1,0 +1,21 @@
+{:deps {io.github.ovistoica/leinpad {:local/root "../"}}
+
+ :tasks
+ {leinpad {:doc "Start development REPL (starts Docker services first)"
+           :requires ([leinpad.core :as leinpad]
+                      [babashka.process :as p])
+           :task (do
+                   (defn docker-up [ctx]
+                     (println "Starting Docker services...")
+                     (deref (p/process ["docker" "compose" "up" "-d"]
+                                       {:out :inherit :err :inherit
+                                        :dir (:project-root ctx)}))
+                     (println "Docker services started.")
+                     ctx)
+
+                   (leinpad/main {:pre-steps [docker-up]}))}
+
+  docker-down {:doc "Stop Docker services"
+               :requires ([babashka.process :as p])
+               :task (deref (p/process ["docker" "compose" "down"]
+                                       {:out :inherit :err :inherit}))}}}
