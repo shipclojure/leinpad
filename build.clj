@@ -32,7 +32,7 @@
          :basis (b/create-basis {})
          :class-dir class-dir
          :target "target"
-         :src-dirs ["src"]
+         :src-dirs ["src" "resources"]
          :pom-data (pom-data)))
 
 (defn jar
@@ -43,7 +43,7 @@
     (println "\nWriting pom.xml...")
     (b/write-pom opts)
     (println "\nCopying source...")
-    (b/copy-dir {:src-dirs ["src"] :target-dir class-dir})
+    (b/copy-dir {:src-dirs ["src" "resources"] :target-dir class-dir})
     (println "\nBuilding JAR...")
     (b/jar opts)
     (println "\nBuild Done ✅"))
