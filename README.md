@@ -106,7 +106,7 @@ Both `leinpad.edn` and `leinpad.local.edn` use the same format with these keys:
 
 | Key                   | Type   | Description                                                                          |
 |-----------------------|--------|--------------------------------------------------------------------------------------|
-| `:leinpad/options`    | map    | CLJ-style options (`:emacs`, `:verbose`, `:clean`, `:go`, etc.)                      |
+| `:leinpad/options`    | map    | CLJ-style options (`:emacs`, `:verbose`, `:clean`, `:go`, `:jvm-opts`, etc.)         |
 | `:leinpad/profiles`   | vector | Lein profiles to activate                                                            |
 | `:leinpad/extra-deps` | vector | Extra dependencies injected via `lein update-in`                                     |
 | `:leinpad/main-opts`  | vector | Default CLI args (cli version of `:leinpad/options`) (e.g. `["--emacs" "--go"]`)     |
@@ -215,6 +215,7 @@ Options:
   --no-go              Don't call (user/go) (default)
   --clean              Run lein clean before starting (default)
   --no-clean           Skip lein clean
+  --no-jvm-opts        Skip default JVM opts injection
   -p, --port PORT      nREPL port (default: random)
   -b, --bind ADDR      nREPL bind address (default: 127.0.0.1)
   --profile PROFILE    Add lein profile (repeatable)
@@ -246,9 +247,10 @@ Leinpad performs a series of steps, threading a context map through each one. Th
 **Before process starts:**
 1. `read-lein-config` -- Read and merge config files
 2. `get-nrepl-port` -- Assign a free port if not set
-3. `inject-lein-middleware` -- Resolve middleware dependency versions
-4. `maybe-lein-clean` -- Run `lein clean` if configured
-5. `print-summary` -- Print startup overview
+3. `inject-jvm-opts` -- Populate JVM opts (dev defaults + user-specified)
+4. `inject-lein-middleware` -- Resolve middleware dependency versions
+5. `maybe-lein-clean` -- Run `lein clean` if configured
+6. `print-summary` -- Print startup overview
 
 **After process starts:**
 1. `wait-for-nrepl` -- Wait for nREPL to become reachable
@@ -291,6 +293,37 @@ For projects using shadow-cljs, see the `template-shadow-cljs` directory. Leinpa
 ```
 
 With `--emacs`, leinpad connects both CLJ and CLJS sibling REPLs to Emacs CIDER.
+
+## JVM Opts Injection
+
+Leinpad automatically injects several JVM flags that significantly improve the Clojure development experience:
+
+| Flag | Purpose |
+|------|---------|
+| `-XX:-OmitStackTraceInFastThrow` | Prevents HotSpot from eliding stack traces on frequently thrown exceptions |
+| `-Dclojure.main.report=stderr` | Prints uncaught exceptions to stderr instead of a temp file |
+| `-Djdk.attach.allowAttachSelf` | Enables nREPL interrupt (`C-c C-c`) on JDK 21+ |
+| `-XX:+EnableDynamicAgentLoading` | Allows dynamic agent loading on JDK 21+ |
+
+These flags are injected by default. To disable them:
+
+```
+bb leinpad --no-jvm-opts
+```
+
+Or in `leinpad.edn`:
+
+```clojure
+{:leinpad/options {:inject-jvm-opts false}}
+```
+
+You can also add your own JVM opts via `leinpad.edn`:
+
+```clojure
+{:leinpad/options {:jvm-opts ["-Xmx4g" "-Dmy.prop=value"]}}
+```
+
+User-specified JVM opts are merged with the defaults (unless defaults are disabled).
 
 ## Differences from Launchpad
 

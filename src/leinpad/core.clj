@@ -122,6 +122,21 @@
     (contains? deps dep-sym)))
 
 ;; ============================================================================
+;; Default JVM opts for development
+;; ============================================================================
+
+(def default-jvm-opts
+  "JVM flags injected by default to improve the dev experience.
+   - -XX:-OmitStackTraceInFastThrow  — keep full stack traces at all times
+   - -Dclojure.main.report=stderr    — print uncaught exceptions to stderr
+   - -Djdk.attach.allowAttachSelf    — allow nREPL interrupt on JDK 21+
+   - -XX:+EnableDynamicAgentLoading  — allow dynamic agent loading on JDK 21+"
+  ["-XX:-OmitStackTraceInFastThrow"
+   "-Dclojure.main.report=stderr"
+   "-Djdk.attach.allowAttachSelf"
+   "-XX:+EnableDynamicAgentLoading"])
+
+;; ============================================================================
 ;; Configuration
 ;; ============================================================================
 
@@ -138,6 +153,7 @@
    :verbose false
    :go false
    :clean true
+   :inject-jvm-opts true
    :cider-nrepl false
    :refactor-nrepl false
    :shadow-cljs false
@@ -230,6 +246,7 @@
           "--no-go" (recur rest-args (assoc opts :go false))
           "--clean" (recur rest-args (assoc opts :clean true))
           "--no-clean" (recur rest-args (assoc opts :clean false))
+          "--no-jvm-opts" (recur rest-args (assoc opts :inject-jvm-opts false))
           ("--port" "-p") (recur (next rest-args) (assoc opts :nrepl-port (parse-long (first rest-args))))
           ("--bind" "-b") (recur (next rest-args) (assoc opts :nrepl-bind (first rest-args)))
           "--profile" (recur (next rest-args) (update opts :profiles (fnil conj []) (keyword (first rest-args))))
@@ -256,6 +273,7 @@
                      (println "  --no-go              Don't call (user/go) (default)")
                      (println "  --clean              Run lein clean before starting (default)")
                      (println "  --no-clean           Skip lein clean")
+                     (println "  --no-jvm-opts        Skip default JVM opts injection")
                      (println "  -p, --port PORT      nREPL port (default: random)")
                      (println "  -b, --bind ADDR      nREPL bind address (default: 127.0.0.1)")
                      (println "  --profile PROFILE    Add lein profile (repeatable)")
@@ -287,6 +305,16 @@
   "Assign a random free port if :nrepl-port is not set."
   [ctx]
   (assoc ctx :nrepl-port (or (:nrepl-port ctx) (free-port))))
+
+(defn inject-jvm-opts
+  "Populate :jvm-opts with default dev-friendly JVM flags plus any
+   user-provided opts from leinpad.edn. Defaults can be disabled via
+   --no-jvm-opts or {:inject-jvm-opts false} in config."
+  [ctx]
+  (let [user-opts (or (:jvm-opts ctx) [])
+        defaults  (if (:inject-jvm-opts ctx) default-jvm-opts [])
+        combined  (vec (distinct (concat defaults user-opts)))]
+    (assoc ctx :jvm-opts combined)))
 
 (defn inject-lein-middleware
   "Resolve dependency versions for nREPL middleware. When emacs is enabled,
@@ -332,11 +360,12 @@
 (defn build-lein-cmd
   "Build the lein command vector with runtime dependency injection.
    Uses `lein update-in` to inject nREPL, CIDER, refactor-nrepl, and
-   shadow-cljs dependencies/plugins at startup.
+   shadow-cljs dependencies/plugins at startup. Also injects JVM opts
+   for an improved dev experience.
    Skips injecting a dependency if the project already declares it."
   [{:keys [nrepl-port nrepl-bind profiles cider-nrepl refactor-nrepl shadow-cljs
            nrepl-version cider-nrepl-version refactor-nrepl-version shadow-cljs-version
-           extra-deps]
+           extra-deps jvm-opts]
     :as ctx
     :or {nrepl-version (library-version 'nrepl/nrepl)
          cider-nrepl-version (library-version 'cider/cider-nrepl)
@@ -356,6 +385,14 @@
       ;; with-profile must come before update-in
       (seq profile-str)
       (into ["with-profile" profile-str "do"])
+
+      ;; Inject JVM opts for improved dev experience
+      (seq jvm-opts)
+      (as-> cmd
+            (reduce (fn [c opt]
+                      (into c ["update-in" ":jvm-opts" "conj"
+                               (format "\"%s\"" opt) "--"]))
+                    cmd jvm-opts))
 
       ;; Always inject nrepl
       true
@@ -418,6 +455,7 @@
     (when (:cider-nrepl ctx) (log/info "  with cider-nrepl" (:cider-nrepl-version ctx)))
     (when (:refactor-nrepl ctx) (log/info "  with refactor-nrepl" (:refactor-nrepl-version ctx)))
     (when (:shadow-cljs ctx) (log/info "  with shadow-cljs" (:shadow-cljs-version ctx)))
+    (when (seq (:jvm-opts ctx)) (log/debug "  with JVM opts:" (str/join " " (:jvm-opts ctx))))
     (log/debug "Command:" (str/join " " cmd))
     (let [proc-env (merge (into {} (System/getenv))
                           (:env ctx))
@@ -521,6 +559,12 @@
       (when (seq opts)
         (println (label "Options:")
                  (str/join ", " (map (comp value name key) opts)))))
+    (when (seq (:jvm-opts ctx))
+      (println (label "JVM opts:")
+               (value (count (:jvm-opts ctx))) (label "flags injected"))
+      (when (:verbose ctx)
+        (doseq [opt (:jvm-opts ctx)]
+          (println (label "  ") (value opt)))))
     (when (:shadow-cljs ctx)
       (println (label "Shadow-cljs builds:")
                (str/join ", " (map (comp value name) (:shadow-build-ids ctx)))))
@@ -564,6 +608,7 @@
   [read-lein-config
    apply-verbose
    get-nrepl-port
+   inject-jvm-opts
    inject-lein-middleware
    maybe-lein-clean
    print-summary])
@@ -582,19 +627,21 @@
   "Main entry point. Call from your bin/leinpad script.
 
   Options:
-    :profiles      [:dev :test]    - Lein profiles to activate
-    :nrepl-port    7888            - nREPL port (default: random free port)
-    :go            true            - Call (user/go) after startup
-    :pre-steps     [my-step]       - Steps to run before start-lein-process
-    :post-steps    [my-other-step] - Steps to run after start-lein-process
-    :steps         [...]           - Full override of step pipeline
-    :emacs         true            - Enable Emacs integration
-    :clean         true            - Run lein clean before starting
-    :cider-nrepl   true            - Include CIDER nREPL middleware
-    :refactor-nrepl true           - Include refactor-nrepl middleware
-    :shadow-cljs   true            - Enable shadow-cljs integration
-    :shadow-build-ids [:app]       - Shadow builds to watch
-    :shadow-connect-ids [:app]     - Shadow builds to connect REPL"
+    :profiles       [:dev :test]    - Lein profiles to activate
+    :nrepl-port     7888            - nREPL port (default: random free port)
+    :go             true            - Call (user/go) after startup
+    :pre-steps      [my-step]       - Steps to run before start-lein-process
+    :post-steps     [my-other-step] - Steps to run after start-lein-process
+    :steps          [...]           - Full override of step pipeline
+    :emacs          true            - Enable Emacs integration
+    :clean          true            - Run lein clean before starting
+    :inject-jvm-opts true           - Inject default dev JVM opts (default: true)
+    :jvm-opts       [\"-Xmx4g\"]     - Extra JVM opts to inject
+    :cider-nrepl    true            - Include CIDER nREPL middleware
+    :refactor-nrepl true            - Include refactor-nrepl middleware
+    :shadow-cljs    true            - Enable shadow-cljs integration
+    :shadow-build-ids  [:app]       - Shadow builds to watch
+    :shadow-connect-ids [:app]      - Shadow builds to connect REPL"
   ([] (main {}))
   ([opts]
    (let [cli-opts (parse-cli-args *command-line-args*)
