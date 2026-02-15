@@ -1,5 +1,7 @@
 # Leinpad
 
+[![Clojars Project](https://img.shields.io/clojars/v/com.shipclojure/leinpad.svg)](https://clojars.org/com.shipclojure/leinpad)
+
 A launchpad-inspired dev process launcher for Leiningen projects.
 
 > **⚠️ Development use only.** Leinpad is a local development tool — it
@@ -40,7 +42,7 @@ See `template-*` for an example setup. You need a few pieces:
 ### `bb.edn`
 
 ```clojure
-{:deps {io.github.ovistoica/leinpad {:git/sha "..."}}
+{:deps {com.shipclojure/leinpad {:mvn/version "v0.1.2"}}
 
  :tasks
  {leinpad {:doc "Start development REPL"

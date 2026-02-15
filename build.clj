@@ -5,7 +5,7 @@
    [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'com.shipclojure/leinpad)
-(def version "v0.1.0")
+(def version "v0.1.2")
 (def class-dir "target/classes")
 (def url "https://github.com/shipclojure/leinpad")
 
