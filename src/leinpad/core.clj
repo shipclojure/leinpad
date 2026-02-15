@@ -452,7 +452,13 @@
                                           build-ids)))]
       (log/info "Starting shadow-cljs watch for builds:" (str/join " " (map name build-ids)))
       (try
-        (let [result (nrepl/eval-expr host port clj-code :timeout 120000)]
+        (let [stderr-fn (fn [msg]
+                          (let [s (str/trim msg)]
+                            (when (seq s)
+                              (println (log/fg :cyan "[SHADOW]") s))))
+              result (nrepl/eval-expr host port clj-code
+                                      :timeout 120000
+                                      :stderr-fn stderr-fn)]
           (if (= ":shadow-started" result)
             (do
               (log/info "Shadow-cljs builds started successfully")

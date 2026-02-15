@@ -16,8 +16,15 @@
     x))
 
 (defn eval-expr
-  "Evaluate code in a running nREPL server. Returns the result string or throws on error."
-  [host port code & {:keys [timeout] :or {timeout 60000}}]
+  "Evaluate code in a running nREPL server. Returns the result string or throws on error.
+
+   Options:
+     :timeout     — socket timeout in ms (default 60000)
+     :stderr-fn   — callback invoked with each stderr chunk (default: log/debug).
+                     Pass `log/info` or `println` to surface process output."
+  [host port code & {:keys [timeout stderr-fn]
+                     :or {timeout 60000
+                          stderr-fn (fn [msg] (log/debug "nREPL stderr:" msg))}}]
   (log/debug "nREPL eval on" (str host ":" port) "-" code)
   (with-open [socket (Socket. ^String host ^int port)
               in (PushbackInputStream. (.getInputStream socket))
@@ -36,10 +43,10 @@
           ex
           (recur result ex)
 
-          ;; stderr output — log it but don't treat as error
+          ;; stderr output — route through caller-supplied handler
           err
           (do
-            (log/debug "nREPL stderr:" err)
+            (stderr-fn err)
             (recur result error))
 
           value
