@@ -325,13 +325,91 @@ You can also add your own JVM opts via `leinpad.edn`:
 
 User-specified JVM opts are merged with the defaults (unless defaults are disabled).
 
-## Differences from Launchpad
+## Feature Comparison with Launchpad
 
-Leinpad is designed for Leiningen projects while launchpad targets deps.edn projects. Some key differences:
+Leinpad is the Leiningen equivalent of [lambdaisland/launchpad](https://github.com/lambdaisland/launchpad) (deps.edn). This table gives a complete comparison of the two.
 
-- **No hot-reloading** -- Leiningen uses a different dependency resolution mechanism than tools.deps, so live classpath injection is not possible. Dependencies are injected at startup via `lein update-in`.
-- **No live env var reloading** -- Launchpad uses JVM hacks to hot-reload `.env` files into a running process. Leinpad loads `.env` files once at startup and passes them to the child process — changes require a restart.
-- **`lein update-in` instead of `-Sdeps`** -- Launchpad uses tools.deps' `-Sdeps` flag to inject extra dependencies. Leinpad uses `lein update-in` to achieve the same effect with Leiningen.
+### Core REPL Features
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| nREPL launch | ✅ | ✅ | |
+| Random free port | ✅ | ✅ | |
+| Custom nREPL port/bind | ✅ | ✅ | |
+| `--go` / `(user/go)` | ✅ | ✅ | |
+| Custom step pipeline | ✅ | ✅ | `pre-steps`/`post-steps`/`steps` |
+| Local config file (not checked in) | ✅ | ✅ | `deps.local.edn` / `leinpad.local.edn` |
+
+### Editor Integration
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| CIDER middleware injection | ✅ | ✅ | |
+| refactor-nrepl injection | ✅ | ✅ | |
+| Emacs auto-connect (CLJ) | ✅ | ✅ | |
+| Emacs auto-connect (CLJS sibling) | ✅ | ✅ | |
+| Emacs version detection | ✅ | ✅ | Queries running Emacs for middleware versions |
+| `--vs-code` alias | ✅ | ✅ | |
+
+### ClojureScript
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| Shadow-cljs integration | ✅ | ✅ | |
+| Shadow-cljs build watch | ✅ | ✅ | |
+| Shadow-cljs CLJS REPL connect | ✅ | ✅ | |
+
+### JVM Configuration
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| `-XX:-OmitStackTraceInFastThrow` | ✅ | ✅ | Keeps full stack traces in dev |
+| `-Dclojure.main.report=stderr` | ✅ | ✅ | Uncaught exceptions printed to terminal |
+| `-Djdk.attach.allowAttachSelf` | ✅ | ✅ | nREPL interrupt on JDK 21+ |
+| `-XX:+EnableDynamicAgentLoading` | ✅ | ✅ | Dynamic agent loading on JDK 21+ |
+| Custom JVM opts via config | ✅ | ✅ | `:java-args` in launchpad / `:jvm-opts` in leinpad |
+
+### Environment Variables
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| `.env` / `.env.local` loading | ✅ | ✅ | |
+| Hot-reload `.env` files | ✅ | ❌ | Requires JVM hacks; leinpad loads once at startup |
+| Config-file env vars | ❌ | ✅ | `:leinpad/env` in `leinpad.edn` |
+
+### Dev Tool Integrations
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| Portal data inspector (`--portal`) | ✅ | ❌ | Planned |
+| Sayid tracing debugger (`--sayid`) | ✅ | ❌ | Planned |
+| debug-repl (`--debug-repl`) | ✅ | ❌ | Planned |
+| `--no-namespace-maps` middleware | ✅ | ❌ | Planned |
+| Java version check utility | ✅ | ❌ | Planned |
+
+### Process Management
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| `run-process` helper | ✅ | ❌ | Planned; users can use `babashka.process` directly |
+| Process output prefixing | ✅ | ❌ | Colored `[process]` prefix on stdout/stderr |
+| `--no-prefix` to disable it | ✅ | ❌ | |
+
+### Build Tool Specific
+
+| Feature | Launchpad | Leinpad | Notes |
+|---------|:---------:|:-------:|-------|
+| `lein clean` before start | ❌ | ✅ | Leiningen-specific |
+| Hot-reload deps.edn | ✅ | ❌ | Requires `lambdaisland/classpath` + tools.deps |
+| File watcher infrastructure | ✅ | ❌ | Requires `beholder` (JVM library) |
+| `--execute` (`:exec-fn`) | ✅ | ❌ | deps.edn feature, no Leiningen equivalent |
+| Inject aliases as system property | ✅ | ❌ | Not directly applicable |
+| Classpath cache writing | ✅ | ❌ | tools.deps specific (`.cpcache/launchpad.cp`) |
+
+### Key Architectural Differences
+
+- **Dependency injection** -- Launchpad uses tools.deps' `-Sdeps` flag. Leinpad uses `lein update-in` to achieve the same effect without modifying `project.clj`.
+- **Hot-reloading** -- Launchpad can live-reload dependencies, `.env` files, and watch for file changes at runtime via JVM internals (`lambdaisland/classpath`, `jnr-posix`, `beholder`). Leinpad loads everything once at startup — changes require a restart.
 
 ## License
 
