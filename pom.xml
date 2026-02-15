@@ -23,7 +23,7 @@
     <url>https://github.com/shipclojure/leinpad</url>
     <connection>scm:git:git://github.com/shipclojure/leinpad.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/shipclojure/leinpad.git</developerConnection>
-    <tag>v0.1.0</tag>
+    <tag>v0.1.2</tag>
   </scm>
   <dependencies>
     <dependency>
