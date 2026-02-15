@@ -10,6 +10,7 @@
    [babashka.wait :as wait]
    [clojure.edn :as edn]
    [clojure.string :as str]
+   [leinpad.env :as env]
    [leinpad.log :as log]
    [leinpad.nrepl :as nrepl]))
 
@@ -64,12 +65,12 @@
   (log/info "Connecting Emacs to ClojureScript REPL for build:" (name build-id))
   (let [init-sym (str "leinpad/" (name build-id))
         register-elisp (format
-                        "(setf (alist-get '%s cider-cljs-repl-types) '(\"%s\"))"
-                        init-sym
-                        (pr-str `(shadow.cljs.devtools.api/nrepl-select ~build-id)))
+                         "(setf (alist-get '%s cider-cljs-repl-types) '(\"%s\"))"
+                         init-sym
+                         (pr-str `(shadow.cljs.devtools.api/nrepl-select ~build-id)))
         connect-elisp (format
-                       "(cider-connect-sibling-cljs '(:cljs-repl-type %s :host \"%s\" :port %d :project-dir \"%s\"))"
-                       init-sym host port project-dir)]
+                        "(cider-connect-sibling-cljs '(:cljs-repl-type %s :host \"%s\" :port %d :project-dir \"%s\"))"
+                        init-sym host port project-dir)]
     (eval-emacs register-elisp)
     (Thread/sleep 500)
     (let [result (eval-emacs connect-elisp)]
@@ -147,43 +148,56 @@
 
 (defn- merge-leinpad-configs
   "Merge two leinpad config maps (with :leinpad/ namespaced keys).
-   :leinpad/options are deep-merged. Collection keys are combined with distinct."
+  `:leinpad/options` are deep-merged. Collection keys are combined with distinct.
+  `:leinpad/env` maps are merged."
   [a b]
   (let [merged-opts (merge (:leinpad/options a) (:leinpad/options b))
         merged-profiles (vec (distinct (into (or (:leinpad/profiles a) [])
                                              (or (:leinpad/profiles b) []))))
         merged-deps (vec (distinct (into (or (:leinpad/extra-deps a) [])
                                          (or (:leinpad/extra-deps b) []))))
-        merged-main-opts (or (:leinpad/main-opts b) (:leinpad/main-opts a))]
+        merged-main-opts (or (:leinpad/main-opts b) (:leinpad/main-opts a))
+        merged-env (merge (:leinpad/env a) (:leinpad/env b))]
     (cond-> {}
       (seq merged-opts) (assoc :leinpad/options merged-opts)
+      (seq merged-env) (assoc :leinpad/env merged-env)
       (seq merged-profiles) (assoc :leinpad/profiles merged-profiles)
       (seq merged-deps) (assoc :leinpad/extra-deps merged-deps)
       merged-main-opts (assoc :leinpad/main-opts merged-main-opts))))
 
+(def merge-colls (comp vec
+                       distinct
+                       (fnil into [])))
+
 (defn read-lein-config
   "Read leinpad.edn + leinpad.local.edn, merge with defaults and ctx.
-   Both files use the same :leinpad/ namespaced format."
+   Both files use the same :leinpad/ namespaced format.
+   Also loads .env & .env.local from the project root."
   [ctx]
   (let [project-root (:project-root ctx (System/getProperty "user.dir"))
         file-config (load-config-file (str (fs/path project-root "leinpad.edn")))
         local-config (load-config-file (str (fs/path project-root "leinpad.local.edn")))
+        ;; Load .env files (lower precedence than config files)
+        dotenv-vars (env/load-dotenv-files project-root)
         ;; Merge the two leinpad config files
         leinpad-config (merge-leinpad-configs file-config local-config)
         ;; Build the flat ctx: defaults < options from files < programmatic ctx
         merged (merge default-config
                       (:leinpad/options leinpad-config)
                       ctx)
-        ;; Merge collection keys
+        ;; Merge collection keys and env vars
         merged (cond-> merged
                  (:leinpad/profiles leinpad-config)
-                 (update :profiles #(vec (distinct (into (or % []) (:leinpad/profiles leinpad-config)))))
+                 (update :profiles (merge-colls (:leinpad/profiles leinpad-config)))
 
                  (:leinpad/extra-deps leinpad-config)
-                 (update :extra-deps #(vec (distinct (into (or % []) (:leinpad/extra-deps leinpad-config)))))
+                 (update :extra-deps (merge-colls (:leinpad/extra-deps leinpad-config)))
 
                  (:leinpad/main-opts leinpad-config)
-                 (update :main-opts #(or % (:leinpad/main-opts leinpad-config))))]
+                 (update :main-opts #(or % (:leinpad/main-opts leinpad-config)))
+
+                 true
+                 (update :env #(merge dotenv-vars % (:leinpad/env leinpad-config))))]
     (cond-> merged
       (:emacs merged) (assoc :cider-nrepl true :refactor-nrepl true)
       (:vs-code merged) (assoc :cider-nrepl true))))
@@ -369,9 +383,12 @@
     (when (:refactor-nrepl ctx) (log/info "  with refactor-nrepl" (:refactor-nrepl-version ctx)))
     (when (:shadow-cljs ctx) (log/info "  with shadow-cljs" (:shadow-cljs-version ctx)))
     (log/debug "Command:" (str/join " " cmd))
-    (let [proc (process cmd {:out :inherit
+    (let [proc-env (merge (into {} (System/getenv))
+                          (:env ctx))
+          proc (process cmd {:out :inherit
                              :err :inherit
-                             :dir (:project-root ctx)})]
+                             :dir (:project-root ctx)
+                             :env proc-env})]
       (assoc ctx :repl-process proc))))
 
 (defn wait-for-nrepl
@@ -493,6 +510,10 @@
     (println "Go: will call (user/go)"))
   (when (:clean ctx)
     (println "Clean: will run lein clean"))
+  (when-let [env-vars (seq (:env ctx))]
+    (println "Environment variables:" (count env-vars) "set")
+    (when (:verbose ctx)
+      (println "  Keys:" (str/join ", " (sort (map key env-vars))))))
   (println "========================================")
   (println)
   ctx)
@@ -503,13 +524,13 @@
 
 (defn- setup-shutdown-hook! [ctx-atom]
   (.addShutdownHook
-   (Runtime/getRuntime)
-   (Thread.
-    (fn []
-      (println "\nShutting down...")
-      (when-let [proc (:repl-process @ctx-atom)]
-        (println "Stopping REPL...")
-        (p/destroy-tree proc))))))
+    (Runtime/getRuntime)
+    (Thread.
+      (fn []
+        (println "\nShutting down...")
+        (when-let [proc (:repl-process @ctx-atom)]
+          (println "Stopping REPL...")
+          (p/destroy-tree proc))))))
 
 ;; ============================================================================
 ;; Pipeline

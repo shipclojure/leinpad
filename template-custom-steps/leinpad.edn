@@ -1,2 +1,7 @@
 {:leinpad/options {:clean true}
- :leinpad/profiles [:dev]}
+ :leinpad/profiles [:dev]
+
+ ;; Environment variables (or use .env / .env.local files instead)
+ ;; :leinpad/env {"DATABASE_URL" "jdbc:postgresql://localhost/myapp_dev"
+ ;;               "LOG_LEVEL" "info"}
+ }

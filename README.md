@@ -2,6 +2,10 @@
 
 A launchpad-inspired dev process launcher for Leiningen projects.
 
+> **⚠️ Development use only.** Leinpad is a local development tool — it
+> injects dev dependencies, starts nREPL, and connects your editor. It is not
+> intended as a process launcher for production, staging, or CI environments.
+
 Leinpad is to Leiningen what [lambdaisland/launchpad](https://github.com/lambdaisland/launchpad) is to deps.edn. It is a dev process launcher that orchestrates everything needed to get a local development environment running: starting services, configuring nREPL middleware, injecting dev dependencies, connecting your editor, and calling your system's `go` function. One command, consistent setup across the whole team.
 
 It starts from these observations:
@@ -92,27 +96,96 @@ Make sure to `.gitignore` the local config file:
 
 ```shell
 echo leinpad.local.edn >> .gitignore
+# Optional if you plan to use .env
+echo .env.local >> .gitignore
 ```
 
 ## Configuration
 
 Both `leinpad.edn` and `leinpad.local.edn` use the same format with these keys:
 
-| Key                   | Type   | Description                                                     |
-|-----------------------|--------|-----------------------------------------------------------------|
-| `:leinpad/options`    | map    | CLJ-style options (`:emacs`, `:verbose`, `:clean`, `:go`, etc.) |
-| `:leinpad/profiles`   | vector | Lein profiles to activate                                       |
-| `:leinpad/extra-deps` | vector | Extra dependencies injected via `lein update-in`                |
-| `:leinpad/main-opts`  | vector | Default CLI args (cli version of `:leinpad/options`) (e.g. `["--emacs" "--go"]`)                    |
+| Key                   | Type   | Description                                                                          |
+|-----------------------|--------|--------------------------------------------------------------------------------------|
+| `:leinpad/options`    | map    | CLJ-style options (`:emacs`, `:verbose`, `:clean`, `:go`, etc.)                      |
+| `:leinpad/profiles`   | vector | Lein profiles to activate                                                            |
+| `:leinpad/extra-deps` | vector | Extra dependencies injected via `lein update-in`                                     |
+| `:leinpad/main-opts`  | vector | Default CLI args (cli version of `:leinpad/options`) (e.g. `["--emacs" "--go"]`)     |
+| `:leinpad/env`        | map    | Environment variables (string keys/values) for the REPL process               |
 
 ### Merge strategy
 
-Configs merge in order: `defaults < leinpad.edn < leinpad.local.edn < CLI args`
+Configs merge in order: `defaults < .env < .env.local < leinpad.edn < leinpad.local.edn < CLI args`
 
 - `:leinpad/options` -- deep merge (later values win per key)
+- `:leinpad/env` -- deep merge (later values win per key); `.env` files are lowest priority
 - `:leinpad/profiles` -- combined with `distinct`
 - `:leinpad/extra-deps` -- combined with `distinct`
 - `:leinpad/main-opts` -- last non-nil wins
+
+## Environment Variables
+
+Leinpad supports setting environment variables for the REPL process through two mechanisms:
+
+### 1. `.env` files
+
+Create `.env` and/or `.env.local` files in your project root using the standard dotenv format:
+
+```shell
+# .env - Team defaults (checked into git)
+DATABASE_URL=jdbc:postgresql://localhost/myapp_dev
+LOG_LEVEL=info
+APP_ENV=development
+```
+
+```shell
+# .env.local - Personal overrides (add to .gitignore)
+DATABASE_URL=jdbc:postgresql://localhost/my_custom_db
+LOG_LEVEL=debug
+AWS_PROFILE=personal-dev
+```
+
+This format is standard across ecosystems (Node, Rails, Docker, etc.) and works with tools like `direnv` and `docker-compose`.
+
+### 2. `:leinpad/env` in config files
+
+Specify environment variables directly in `leinpad.edn` or `leinpad.local.edn`:
+
+```clojure
+;; leinpad.edn
+{:leinpad/options {:clean true}
+ :leinpad/env {"DATABASE_URL" "jdbc:postgresql://localhost/myapp_dev"
+               "LOG_LEVEL" "info"}}
+
+;; leinpad.local.edn
+{:leinpad/env {"DATABASE_URL" "jdbc:postgresql://localhost/custom_db"
+               "AWS_PROFILE" "personal"}}
+```
+
+### Merge precedence
+
+When the same variable is defined in multiple places, later sources win:
+
+1. Parent shell environment (inherited, lowest priority)
+2. `.env`
+3. `.env.local`
+4. `:leinpad/env` in `leinpad.edn`
+5. `:leinpad/env` in `leinpad.local.edn` (highest priority)
+
+### Security notes
+
+- **Never commit secrets** in files tracked by git
+- Use `.env.local` or `leinpad.local.edn` (both gitignored) for sensitive values
+- Run with `--verbose` to see which env var keys are set (values are never logged)
+
+### Checking env vars in the REPL
+
+```clojure
+(System/getenv "DATABASE_URL")
+;; => "jdbc:postgresql://localhost/my_custom_db"
+
+(System/getenv "PATH")
+;; => "/usr/bin:/bin:..." (inherited from parent shell)
+```
 
 ## Using Leinpad
 
@@ -224,8 +297,8 @@ With `--emacs`, leinpad connects both CLJ and CLJS sibling REPLs to Emacs CIDER.
 Leinpad is designed for Leiningen projects while launchpad targets deps.edn projects. Some key differences:
 
 - **No hot-reloading** -- Leiningen uses a different dependency resolution mechanism than tools.deps, so live classpath injection is not possible. Dependencies are injected at startup via `lein update-in`.
-- **No `.env` file support** -- Use `direnv` or set environment variables in your shell. The child process inherits the parent shell's environment.
-- **`project.clj` stays clean** -- All dev tooling (nREPL middleware, debug deps) is injected at runtime, keeping your `project.clj` focused on production dependencies.
+- **No live env var reloading** -- Launchpad uses JVM hacks to hot-reload `.env` files into a running process. Leinpad loads `.env` files once at startup and passes them to the child process — changes require a restart.
+- **`lein update-in` instead of `-Sdeps`** -- Launchpad uses tools.deps' `-Sdeps` flag to inject extra dependencies. Leinpad uses `lein update-in` to achieve the same effect with Leiningen.
 
 ## License
 

@@ -5,8 +5,8 @@
    [bencode.core :as bencode]
    [leinpad.log :as log])
   (:import
-   [java.net Socket]
-   [java.io PushbackInputStream]))
+   (java.io PushbackInputStream)
+   (java.net Socket)))
 
 (defn- bytes->str
   "Convert byte array to string, or return as-is if already a string."
