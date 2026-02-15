@@ -165,9 +165,12 @@
       (seq merged-deps) (assoc :leinpad/extra-deps merged-deps)
       merged-main-opts (assoc :leinpad/main-opts merged-main-opts))))
 
-(def merge-colls (comp vec
-                       distinct
-                       (fnil into [])))
+(defn merge-colls
+  "Returns an update-fn that merges `new-items` into an existing collection,
+   deduplicating the result."
+  [new-items]
+  (fn [existing]
+    (vec (distinct (into (or existing []) new-items)))))
 
 (defn read-lein-config
   "Read leinpad.edn + leinpad.local.edn, merge with defaults and ctx.
@@ -492,30 +495,37 @@
 (defn print-summary
   "Print a colored startup summary."
   [ctx]
-  (println)
-  (println "========================================")
-  (println "leinpad - Leiningen Dev Process Launcher")
-  (println "========================================")
-  (println "nREPL:" (str (:nrepl-bind ctx) ":" (:nrepl-port ctx)))
-  (println "Profiles:" (str/join ", " (map name (:profiles ctx))))
-  (when (or (:emacs ctx) (:cider-connect ctx))
-    (println "Emacs: will connect CIDER"))
-  (when (:cider-nrepl ctx)
-    (println "CIDER nREPL: enabled"))
-  (when (:refactor-nrepl ctx)
-    (println "refactor-nrepl: enabled"))
-  (when (:shadow-cljs ctx)
-    (println "Shadow-cljs: builds" (str/join ", " (map name (:shadow-build-ids ctx)))))
-  (when (:go ctx)
-    (println "Go: will call (user/go)"))
-  (when (:clean ctx)
-    (println "Clean: will run lein clean"))
-  (when-let [env-vars (seq (:env ctx))]
-    (println "Environment variables:" (count env-vars) "set")
-    (when (:verbose ctx)
-      (println "  Keys:" (str/join ", " (sort (map key env-vars))))))
-  (println "========================================")
-  (println)
+  (let [label  (partial log/fg :green)
+        value  (partial log/fg :magenta)
+        header (partial log/fg :cyan)]
+    (println)
+    (println (header "========================================"))
+    (println (log/bold (header "leinpad"))
+             (header "- Leiningen Dev Process Launcher"))
+    (println (header "========================================"))
+    (println (label "Launching")
+             (log/bold (label "Leiningen REPL"))
+             (label "on nREPL port")
+             (value (:nrepl-port ctx)))
+    (println (label "Profiles:")
+             (str/join ", " (map (comp value name) (:profiles ctx))))
+    (let [opts (filter (comp true? val) (select-keys ctx [:emacs :cider-connect :cider-nrepl
+                                                          :refactor-nrepl :shadow-cljs
+                                                          :go :clean]))]
+      (when (seq opts)
+        (println (label "Options:")
+                 (str/join ", " (map (comp value name key) opts)))))
+    (when (:shadow-cljs ctx)
+      (println (label "Shadow-cljs builds:")
+               (str/join ", " (map (comp value name) (:shadow-build-ids ctx)))))
+    (when-let [env-vars (seq (:env ctx))]
+      (println (label "Environment variables:")
+               (value (count env-vars)) (label "set"))
+      (when (:verbose ctx)
+        (println (label "  Keys:")
+                 (str/join ", " (map value (sort (map key env-vars)))))))
+    (println (header "========================================"))
+    (println))
   ctx)
 
 ;; ============================================================================
