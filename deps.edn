@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "resources"]
  :deps {nrepl/bencode {:mvn/version "1.2.0"}
         com.lambdaisland/dotenv {:mvn/version "0.2.5"}}
  :pom {:group-id "com.shipclojure"

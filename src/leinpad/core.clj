@@ -9,6 +9,7 @@
    [babashka.process :as p :refer [process]]
    [babashka.wait :as wait]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.string :as str]
    [leinpad.env :as env]
    [leinpad.log :as log]
@@ -18,10 +19,15 @@
 ;; Default dependency versions
 ;; ============================================================================
 
-(def default-nrepl-version "1.5.1")
-(def default-cider-nrepl-version "0.58.0")
-(def default-refactor-nrepl-version "3.11.0")
-(def default-shadow-cljs-version "2.28.20")
+(def library-versions
+  "Map of lib-symbol -> {:mvn/version \"...\"} loaded from the resource
+      EDN file. Single source of truth for all injectable dependency versions."
+  (:deps (edn/read-string (slurp (io/resource "leinpad/deps.edn")))))
+
+(defn- library-version
+  "Look up the :mvn/version string for a library symbol"
+  [lib-sym]
+  (get-in library-versions [lib-sym :mvn/version]))
 
 ;; ============================================================================
 ;; Emacs Integration
@@ -287,17 +293,22 @@
   "Resolve dependency versions for nREPL middleware. When emacs is enabled,
    tries to match the CIDER/refactor-nrepl versions from the running Emacs."
   [ctx]
-  (let [cider-v (if (:emacs ctx)
-                  (or (emacs-cider-version) default-cider-nrepl-version)
-                  default-cider-nrepl-version)
+  (let [default-nrepl-v (library-version 'nrepl/nrepl)
+        default-cider-v (library-version 'cider/cider-nrepl)
+        default-refactor-v (library-version 'refactor-nrepl/refactor-nrepl)
+
+        cider-v (if (:emacs ctx)
+                  (or (emacs-cider-version) default-cider-v)
+                  default-cider-v)
         refactor-v (if (:emacs ctx)
-                     (or (emacs-refactor-nrepl-version) default-refactor-nrepl-version)
-                     default-refactor-nrepl-version)]
+                     (or (emacs-refactor-nrepl-version) default-refactor-v)
+                     default-refactor-v)
+        shadow-cljs-v (or (:shadow-cljs-version ctx) (library-version 'thheller/shadow-cljs))]
     (assoc ctx
-           :nrepl-version (or (:nrepl-version ctx) default-nrepl-version)
+           :nrepl-version (or (:nrepl-version ctx) default-nrepl-v)
            :cider-nrepl-version cider-v
            :refactor-nrepl-version refactor-v
-           :shadow-cljs-version (or (:shadow-cljs-version ctx) default-shadow-cljs-version))))
+           :shadow-cljs-version shadow-cljs-v)))
 
 (defn maybe-lein-clean
   "Run `lein clean` if :clean is true."
@@ -316,12 +327,12 @@
    Skips injecting a dependency if the project already declares it."
   [{:keys [nrepl-port nrepl-bind profiles cider-nrepl refactor-nrepl shadow-cljs
            nrepl-version cider-nrepl-version refactor-nrepl-version shadow-cljs-version
-           extra-deps project-root]
+           extra-deps]
     :as ctx
-    :or {nrepl-version default-nrepl-version
-         cider-nrepl-version default-cider-nrepl-version
-         refactor-nrepl-version default-refactor-nrepl-version
-         shadow-cljs-version default-shadow-cljs-version}}]
+    :or {nrepl-version (library-version 'nrepl/nrepl)
+         cider-nrepl-version (library-version 'cider/cider-nrepl)
+         refactor-nrepl-version (library-version 'refactor-nrepl/refactor-nrepl)
+         shadow-cljs-version (library-version 'thheller/shadow-cljs)}}]
   (let [;; Auto-add :cljs profile when shadow-cljs is enabled
         profiles (cond-> profiles
                    (and shadow-cljs (not (some #{:cljs} profiles)))

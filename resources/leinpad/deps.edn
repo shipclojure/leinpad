@@ -1,0 +1,8 @@
+;; Injectable dependency versions for leinpad.
+;; Keep in deps.edn format so version-management tools (antq, etc.) can
+;; detect and bump versions automatically.
+{:deps
+ {nrepl/nrepl                   {:mvn/version "1.5.1"}
+  cider/cider-nrepl             {:mvn/version "0.58.0"}
+  refactor-nrepl/refactor-nrepl {:mvn/version "3.11.0"}
+  thheller/shadow-cljs          {:mvn/version "3.3.5"}}}
