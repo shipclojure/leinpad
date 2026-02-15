@@ -89,12 +89,14 @@
 
 (defn- read-project-clj
   "Read and parse project.clj, returning the defproject form as a map.
-   Returns nil if project.clj doesn't exist or can't be parsed."
+   Returns nil if project.clj doesn't exist or can't be parsed.
+   Uses Clojure's read-string (not EDN) to handle reader macros like
+   #', *var*, and regex literals that are common in project.clj files."
   [project-root]
   (let [f (str (fs/path project-root "project.clj"))]
     (when (fs/exists? f)
       (try
-        (let [form (edn/read-string (slurp f))
+        (let [form (read-string (slurp f))
               ;; defproject name version & args
               args (drop 3 form)]
           (apply hash-map args))
