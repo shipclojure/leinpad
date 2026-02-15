@@ -522,7 +522,7 @@
              (str/join ", " (map (comp value name) (:profiles ctx))))
     (let [opts (filter (comp true? val) (select-keys ctx [:emacs :cider-connect :cider-nrepl
                                                           :refactor-nrepl :shadow-cljs
-                                                          :go :clean]))]
+                                                          :go :clean :verbose]))]
       (when (seq opts)
         (println (label "Options:")
                  (str/join ", " (map (comp value name key) opts)))))
@@ -557,8 +557,17 @@
 ;; Pipeline
 ;; ============================================================================
 
+(defn apply-verbose
+  "Sync the :verbose flag from the merged context into the log system
+   so that debug output is enabled when set via leinpad.edn / leinpad.local.edn."
+  [ctx]
+  (when (:verbose ctx)
+    (log/set-verbose! true))
+  ctx)
+
 (def before-steps
   [read-lein-config
+   apply-verbose
    get-nrepl-port
    inject-lein-middleware
    maybe-lein-clean

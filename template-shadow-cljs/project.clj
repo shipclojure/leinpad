@@ -1,7 +1,7 @@
 (defproject com.example/myapp-cljs "0.1.0-SNAPSHOT"
   :description "Example Leiningen + shadow-cljs project using leinpad"
   :dependencies [[org.clojure/clojure "1.12.0"]
-                 [org.clojure/clojurescript "1.11.132"]]
+                 [org.clojure/clojurescript "1.12.134"]]
 
   :source-paths ["src"]
 

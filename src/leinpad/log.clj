@@ -27,9 +27,17 @@
 ;; Logging
 ;; ============================================================================
 
-(def verbose? (some #{"-v" "--verbose"} *command-line-args*))
+(def verbose?
+  "Atom controlling debug output. Initialised from CLI flags; can be
+   toggled later via `set-verbose!` (e.g. after reading leinpad config)."
+  (atom (boolean (some #{"-v" "--verbose"} *command-line-args*))))
 
-(defn debug [& args] (when verbose? (apply println (fg :cyan "[DEBUG]") args)))
+(defn set-verbose!
+  "Enable or disable verbose (debug) logging at runtime."
+  [v]
+  (reset! verbose? (boolean v)))
+
+(defn debug [& args] (when @verbose? (apply println (fg :cyan "[DEBUG]") args)))
 (defn info  [& args] (apply println (fg :green "[INFO]") args))
 (defn warn  [& args] (apply println (fg :yellow "[WARN]") args))
 (defn error [& args] (apply println (fg :red "[ERROR]") args))
