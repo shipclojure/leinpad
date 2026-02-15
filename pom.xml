@@ -29,12 +29,12 @@
     <dependency>
       <groupId>org.clojure</groupId>
       <artifactId>clojure</artifactId>
-      <version>1.12.3</version>
+      <version>1.12.2</version>
     </dependency>
     <dependency>
-      <groupId>nrepl</groupId>
-      <artifactId>bencode</artifactId>
-      <version>1.2.0</version>
+      <groupId>com.lambdaisland</groupId>
+      <artifactId>dotenv</artifactId>
+      <version>0.2.5</version>
     </dependency>
   </dependencies>
   <build>
