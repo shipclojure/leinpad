@@ -12,8 +12,7 @@
    [clojure.java.io :as io]
    [clojure.string :as str]
    [leinpad.env :as env]
-   [leinpad.log :as log]
-   [leinpad.nrepl :as nrepl]))
+   [leinpad.log :as log]))
 
 ;; ============================================================================
 ;; Default dependency versions
@@ -320,6 +319,16 @@
     (log/info "Clean complete"))
   ctx)
 
+(defn- shadow-injection-form
+  "Build a Clojure form string that starts shadow-cljs server and watches builds.
+   Used as a lein :injections entry so output goes to process stdout/stderr."
+  [build-ids]
+  (let [watches (str/join " "
+                          (map #(format "(shadow.cljs.devtools.api/watch %s)" %)
+                               build-ids))]
+    (format "(do (require 'shadow.cljs.devtools.server) (require 'shadow.cljs.devtools.api) (shadow.cljs.devtools.server/start!) %s)"
+            watches)))
+
 (defn build-lein-cmd
   "Build the lein command vector with runtime dependency injection.
    Uses `lein update-in` to inject nREPL, CIDER, refactor-nrepl, and
@@ -375,6 +384,19 @@
       shadow-cljs
       (into ["update-in" ":repl-options:nrepl-middleware" "conj"
              "shadow.cljs.devtools.server.nrepl/middleware" "--"])
+
+      ;; Shadow-cljs: start server + watch builds via :injections so output
+      ;; flows naturally through the process stdout/stderr
+      shadow-cljs
+      (into ["update-in" ":injections" "conj"
+             (shadow-injection-form (or (:shadow-build-ids ctx) [:app]))
+             "--"])
+
+      ;; (user/go) via :injections — runs after shadow, before nREPL starts
+      (:go ctx)
+      (into ["update-in" ":injections" "conj"
+             "(try (require 'user) (println \"(user/go) =>\" (user/go)) (catch Exception e (println \"(user/go) failed:\" (.getMessage e))))"
+             "--"])
 
       ;; Extra deps from leinpad config
       (seq extra-deps)
@@ -439,52 +461,19 @@
                     [id port])))
           build-ids)))
 
-(defn maybe-start-shadow
-  "Start shadow-cljs builds via nREPL eval after the REPL is running."
+(defn maybe-log-shadow-summary
+  "Log shadow-cljs dashboard and dev-server URLs from shadow-cljs.edn.
+   The actual server/watch startup happens via :injections in the lein
+   command (see build-lein-cmd / shadow-injection-form)."
   [ctx]
   (when (:shadow-cljs ctx)
     (let [build-ids (or (seq (:shadow-build-ids ctx)) [:app])
-          host (:nrepl-bind ctx)
-          port (:nrepl-port ctx)
-          clj-code (format "(do (require 'shadow.cljs.devtools.server) (require 'shadow.cljs.devtools.api) (shadow.cljs.devtools.server/start!) %s :shadow-started)"
-                           (str/join " "
-                                     (map #(format "(shadow.cljs.devtools.api/watch %s)" (keyword %))
-                                          build-ids)))]
-      (log/info "Starting shadow-cljs watch for builds:" (str/join " " (map name build-ids)))
-      (try
-        (let [stderr-fn (fn [msg]
-                          (let [s (str/trim msg)]
-                            (when (seq s)
-                              (println (log/fg :cyan "[SHADOW]") s))))
-              result (nrepl/eval-expr host port clj-code
-                                      :timeout 120000
-                                      :stderr-fn stderr-fn)]
-          (if (= ":shadow-started" result)
-            (do
-              (log/info "Shadow-cljs builds started successfully")
-              (let [shadow-config (read-shadow-cljs-edn (:project-root ctx))
-                    http-ports (shadow-dev-http-ports shadow-config build-ids)
-                    dashboard-port (get-in shadow-config [:http :port] 9630)]
-                (log/info (str "Shadow-cljs dashboard: http://localhost:" dashboard-port))
-                (doseq [[id p] http-ports]
-                  (log/info (str "  " (name id) " dev server: http://localhost:" p)))))
-            (log/info "Shadow-cljs returned:" result)))
-        (catch Exception e
-          (log/warn "Failed to start shadow-cljs builds:" (ex-message e))))))
-  ctx)
-
-(defn maybe-go
-  "Evaluate (user/go) via nREPL if :go is true."
-  [ctx]
-  (when (:go ctx)
-    (let [host (:nrepl-bind ctx)
-          port (:nrepl-port ctx)]
-      (log/info "Evaluating (user/go)...")
-      (try
-        (let [result (nrepl/eval-expr host port "(user/go)" :timeout 120000)]
-          (log/info "(user/go) =>" result))
-        (catch Exception e
-          (log/warn "(user/go) failed:" (ex-message e))))))
+          shadow-config (read-shadow-cljs-edn (:project-root ctx))
+          http-ports (shadow-dev-http-ports shadow-config build-ids)
+          dashboard-port (get-in shadow-config [:http :port] 9630)]
+      (log/info (str "Shadow-cljs dashboard: http://localhost:" dashboard-port))
+      (doseq [[id p] http-ports]
+        (log/info (str "  " (name id) " dev server: http://localhost:" p)))))
   ctx)
 
 (defn maybe-connect-emacs
@@ -581,8 +570,7 @@
 
 (def after-steps
   [wait-for-nrepl
-   maybe-start-shadow
-   maybe-go
+   maybe-log-shadow-summary
    maybe-connect-emacs])
 
 (defn process-steps

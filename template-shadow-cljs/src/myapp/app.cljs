@@ -1,5 +1,6 @@
 (ns myapp.app
-  (:require [reagent.dom :as rdom]))
+  (:require
+   [reagent.dom :as rdom]))
 
 (defn root []
   [:div

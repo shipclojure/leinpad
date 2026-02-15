@@ -1,6 +1,5 @@
 {:paths ["src" "resources"]
- :deps {nrepl/bencode {:mvn/version "1.2.0"}
-        com.lambdaisland/dotenv {:mvn/version "0.2.5"}}
+ :deps {com.lambdaisland/dotenv {:mvn/version "0.2.5"}}
  :pom {:group-id "com.shipclojure"
        :artifact-id "leinpad"
        :version "0.1.0"
