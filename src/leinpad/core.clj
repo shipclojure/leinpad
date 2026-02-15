@@ -1,10 +1,6 @@
 (ns leinpad.core
   "A launchpad-inspired dev process launcher for Leiningen projects.
 
-   Reuses lambdaisland/launchpad utilities (Emacs integration, nREPL wait,
-   free-port, CLI handling, process management) and adds Leiningen-specific
-   command building, config reading, and post-startup nREPL evaluation.
-
    Usage:
      (require '[leinpad.core :as leinpad])
      (leinpad/main {:profiles [:dev :test] :nrepl-port 7888 :go true})"
@@ -12,13 +8,10 @@
    [babashka.fs :as fs]
    [babashka.process :as p :refer [process]]
    [babashka.wait :as wait]
-   [bencode.core :as bencode]
    [clojure.edn :as edn]
    [clojure.string :as str]
-   [lambdaisland.launchpad.log :as log])
-  (:import
-   [java.net Socket]
-   [java.io PushbackInputStream]))
+   [leinpad.log :as log]
+   [leinpad.nrepl :as nrepl]))
 
 ;; ============================================================================
 ;; Default dependency versions
@@ -28,55 +21,6 @@
 (def default-cider-nrepl-version "0.58.0")
 (def default-refactor-nrepl-version "3.11.0")
 (def default-shadow-cljs-version "2.28.20")
-
-;; ============================================================================
-;; nREPL Client
-;; ============================================================================
-
-(defn- bytes->str
-  "Convert byte array to string, or return as-is if already a string."
-  [x]
-  (if (bytes? x)
-    (String. ^bytes x "UTF-8")
-    x))
-
-(defn nrepl-eval
-  "Evaluate code in a running nREPL server. Returns the result string or throws on error."
-  [host port code & {:keys [timeout] :or {timeout 60000}}]
-  (log/debug "nREPL eval on" (str host ":" port) "-" code)
-  (with-open [socket (Socket. ^String host ^int port)
-              in (PushbackInputStream. (.getInputStream socket))
-              out (.getOutputStream socket)]
-    (.setSoTimeout socket timeout)
-    (bencode/write-bencode out {"op" "eval" "code" code})
-    (loop [result nil
-           error nil]
-      (let [response (bencode/read-bencode in)
-            status (get response "status")
-            value (bytes->str (get response "value"))
-            err (bytes->str (get response "err"))
-            ex (bytes->str (get response "ex"))]
-        (cond
-          ;; Actual exception — record as error
-          ex
-          (recur result ex)
-
-          ;; stderr output — log it but don't treat as error
-          err
-          (do
-            (log/debug "nREPL stderr:" err)
-            (recur result error))
-
-          value
-          (recur value error)
-
-          (and status (some #(= (bytes->str %) "done") status))
-          (if error
-            (throw (ex-info "nREPL eval error" {:error error :code code}))
-            result)
-
-          :else
-          (recur result error))))))
 
 ;; ============================================================================
 ;; Emacs Integration
@@ -477,7 +421,7 @@
                                           build-ids)))]
       (log/info "Starting shadow-cljs watch for builds:" (str/join " " (map name build-ids)))
       (try
-        (let [result (nrepl-eval host port clj-code :timeout 120000)]
+        (let [result (nrepl/eval-expr host port clj-code :timeout 120000)]
           (if (= ":shadow-started" result)
             (do
               (log/info "Shadow-cljs builds started successfully")
@@ -500,7 +444,7 @@
           port (:nrepl-port ctx)]
       (log/info "Evaluating (user/go)...")
       (try
-        (let [result (nrepl-eval host port "(user/go)" :timeout 120000)]
+        (let [result (nrepl/eval-expr host port "(user/go)" :timeout 120000)]
           (log/info "(user/go) =>" result))
         (catch Exception e
           (log/warn "(user/go) failed:" (ex-message e))))))

@@ -1,4 +1,29 @@
 {:paths ["src"]
- :deps {com.lambdaisland/launchpad {:mvn/version "0.45.201-alpha"}
-        com.lambdaisland/cli       {:mvn/version "0.24.97"}
-        nrepl/bencode              {:mvn/version "1.2.0"}}}
+ :deps {nrepl/bencode {:mvn/version "1.2.0"}}
+
+ :mvn/repos {"central" {:url "https://repo1.maven.org/maven2/"}
+             "clojars" {:url "https://repo.clojars.org/"}}
+
+ :pom {:group-id "com.shipclojure"
+       :artifact-id "leinpad"
+       :version "0.1.0"
+       :name "leinpad"
+       :description "A launchpad-inspired dev process launcher for Leiningen projects"
+       :url "https://github.com/shipclojure/leinpad"
+       :scm {:url "https://github.com/shipclojure/leinpad"
+             :tag "v0.1.0"
+             :connection "scm:git:git://github.com/shipclojure/leinpad.git"
+             :dev-connection "scm:git:ssh://git@github.com/shipclojure/leinpad.git"}
+       :licenses [{:name "MIT License"
+                   :url "https://opensource.org/licenses/MIT"}]
+       :developers [{:name "Ovi Stoica"}]}
+
+ :aliases
+ {:build {:deps {io.github.clojure/tools.build {:mvn/version "0.9.4"}
+                 slipset/deps-deploy {:mvn/version "0.2.1"}}
+          :ns-default build}
+  :deploy {:extra-deps {slipset/deps-deploy {:mvn/version "0.2.2"}}
+           :exec-fn deps-deploy.deps-deploy/deploy
+           :exec-args {:installer :remote
+                       :sign-releases? false
+                       :artifact "target/com.shipclojure/leinpad-v0.1.0.jar"}}}}

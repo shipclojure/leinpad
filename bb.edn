@@ -1,4 +1,10 @@
 {:paths ["src"]
- :deps {com.lambdaisland/launchpad {:mvn/version "0.45.201-alpha"}
-        com.lambdaisland/cli       {:mvn/version "0.24.97"}
-        nrepl/bencode              {:mvn/version "1.2.0"}}}
+ :deps {nrepl/bencode {:mvn/version "1.2.0"}}
+
+ :tasks
+ {jar {:doc "Build jar with latest version"
+       :task (clojure "-T:build jar")}
+  pom {:doc "Build pom.xml based on deps.edn"
+       :task (clojure "-X:deps mvn-pom")}
+  deploy {:doc "Deploy the latest release to Clojars"
+          :task (clojure "-X:deploy")}}}

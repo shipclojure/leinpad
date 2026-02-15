@@ -1,0 +1,54 @@
+(ns leinpad.nrepl
+  "Minimal nREPL client for evaluating code against a running nREPL server.
+   Supports timeouts and proper error detection via the \"ex\" field."
+  (:require
+   [bencode.core :as bencode]
+   [leinpad.log :as log])
+  (:import
+   [java.net Socket]
+   [java.io PushbackInputStream]))
+
+(defn- bytes->str
+  "Convert byte array to string, or return as-is if already a string."
+  [x]
+  (if (bytes? x)
+    (String. ^bytes x "UTF-8")
+    x))
+
+(defn eval-expr
+  "Evaluate code in a running nREPL server. Returns the result string or throws on error."
+  [host port code & {:keys [timeout] :or {timeout 60000}}]
+  (log/debug "nREPL eval on" (str host ":" port) "-" code)
+  (with-open [socket (Socket. ^String host ^int port)
+              in (PushbackInputStream. (.getInputStream socket))
+              out (.getOutputStream socket)]
+    (.setSoTimeout socket timeout)
+    (bencode/write-bencode out {"op" "eval" "code" code})
+    (loop [result nil
+           error nil]
+      (let [response (bencode/read-bencode in)
+            status (get response "status")
+            value (bytes->str (get response "value"))
+            err (bytes->str (get response "err"))
+            ex (bytes->str (get response "ex"))]
+        (cond
+          ;; Actual exception — record as error
+          ex
+          (recur result ex)
+
+          ;; stderr output — log it but don't treat as error
+          err
+          (do
+            (log/debug "nREPL stderr:" err)
+            (recur result error))
+
+          value
+          (recur value error)
+
+          (and status (some #(= (bytes->str %) "done") status))
+          (if error
+            (throw (ex-info "nREPL eval error" {:error error :code code}))
+            result)
+
+          :else
+          (recur result error))))))

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.shipclojure</groupId>
+  <artifactId>leinpad</artifactId>
+  <version>v0.1.0</version>
+  <packaging>jar</packaging>
+  <name>leinpad</name>
+  <description>A launchpad-inspired dev process launcher for Leiningen projects</description>
+  <url>https://github.com/shipclojure/leinpad</url>
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://opensource.org/licenses/MIT</url>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <name>Ovi Stoica</name>
+    </developer>
+  </developers>
+  <scm>
+    <url>https://github.com/shipclojure/leinpad</url>
+    <connection>scm:git:git://github.com/shipclojure/leinpad.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/shipclojure/leinpad.git</developerConnection>
+    <tag>v0.1.0</tag>
+  </scm>
+  <dependencies>
+    <dependency>
+      <groupId>org.clojure</groupId>
+      <artifactId>clojure</artifactId>
+      <version>1.12.3</version>
+    </dependency>
+    <dependency>
+      <groupId>nrepl</groupId>
+      <artifactId>bencode</artifactId>
+      <version>1.2.0</version>
+    </dependency>
+  </dependencies>
+  <build>
+    <sourceDirectory>src</sourceDirectory>
+  </build>
+  <repositories>
+    <repository>
+      <id>clojars</id>
+      <url>https://repo.clojars.org/</url>
+    </repository>
+  </repositories>
+  <distributionManagement>
+    <repository>
+      <id>clojars</id>
+      <name>Clojars repository</name>
+      <url>https://clojars.org/repo</url>
+    </repository>
+  </distributionManagement>
+</project>
