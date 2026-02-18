@@ -2,12 +2,12 @@
  :deps {com.lambdaisland/dotenv {:mvn/version "0.2.5"}}
  :pom {:group-id "com.shipclojure"
        :artifact-id "leinpad"
-       :version "v0.1.2"
+       :version "v0.2.0"
        :name "leinpad"
        :description "A launchpad-inspired dev process launcher for Leiningen projects"
        :url "https://github.com/shipclojure/leinpad"
        :scm {:url "https://github.com/shipclojure/leinpad"
-             :tag "v0.1.2"
+             :tag "v0.2.0"
              :connection "scm:git:git://github.com/shipclojure/leinpad.git"
              :dev-connection "scm:git:ssh://git@github.com/shipclojure/leinpad.git"}
        :licenses [{:name "MIT License"
@@ -22,4 +22,4 @@
            :exec-fn deps-deploy.deps-deploy/deploy
            :exec-args {:installer :remote
                        :sign-releases? false
-                       :artifact "target/com.shipclojure/leinpad-v0.1.2.jar"}}}}
+                       :artifact "target/com.shipclojure/leinpad-v0.2.0.jar"}}}}

@@ -42,7 +42,7 @@ See `template-*` for an example setup. You need a few pieces:
 ### `bb.edn`
 
 ```clojure
-{:deps {com.shipclojure/leinpad {:mvn/version "v0.1.2"}}
+{:deps {com.shipclojure/leinpad {:mvn/version "v0.2.0"}}
 
  :tasks
  {leinpad {:doc "Start development REPL"
