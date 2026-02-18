@@ -314,8 +314,8 @@
    --no-jvm-opts or {:inject-jvm-opts false} in config."
   [ctx]
   (let [user-opts (or (:jvm-opts ctx) [])
-        defaults  (if (:inject-jvm-opts ctx) default-jvm-opts [])
-        combined  (vec (distinct (concat defaults user-opts)))]
+        defaults (if (:inject-jvm-opts ctx) default-jvm-opts [])
+        combined (vec (distinct (concat defaults user-opts)))]
     (assoc ctx :jvm-opts combined)))
 
 (defn inject-lein-middleware
@@ -483,22 +483,40 @@
         (log/error "nREPL failed to start within timeout")
         (System/exit 1)))))
 
+(defn- resolve-shadow-env
+  "Resolve a value that may be a #shadow/env tagged literal.
+   Extracts the :default from the vector form, e.g.
+     #shadow/env [\"PORT\" :as :int :default 9630] → 9630
+   Returns plain values as-is, falls back to `fallback`."
+  [v fallback]
+  (if (tagged-literal? v)
+    (let [form (:form v)]
+      (if (vector? form)
+        (let [kv-pairs (partition 2 (rest form))]
+          (or (some (fn [[k val]] (when (= k :default) val)) kv-pairs)
+              fallback))
+        fallback))
+    (or v fallback)))
+
 (defn- read-shadow-cljs-edn
-  "Read shadow-cljs.edn from the project root, if it exists."
+  "Read shadow-cljs.edn from the project root, if it exists.
+   Handles custom reader tags like #shadow/env gracefully by preserving
+   them as tagged-literal records."
   [project-root]
   (let [f (str (fs/path project-root "shadow-cljs.edn"))]
     (when (fs/exists? f)
-      (edn/read-string (slurp f)))))
+      (edn/read-string {:default tagged-literal} (slurp f)))))
 
 (defn- shadow-dev-http-ports
   "Extract dev HTTP ports from shadow-cljs.edn build configs.
-   Returns a map of build-id -> port."
+   Returns a map of build-id -> port.
+   Handles #shadow/env tagged literals by resolving their :default values."
   [shadow-config build-ids]
   (when shadow-config
     (into {}
           (keep (fn [id]
                   (when-let [port (get-in shadow-config [:builds id :devtools :http-port])]
-                    [id port])))
+                    [id (resolve-shadow-env port port)])))
           build-ids)))
 
 (defn maybe-log-shadow-summary
@@ -510,7 +528,9 @@
     (let [build-ids (or (seq (:shadow-build-ids ctx)) [:app])
           shadow-config (read-shadow-cljs-edn (:project-root ctx))
           http-ports (shadow-dev-http-ports shadow-config build-ids)
-          dashboard-port (get-in shadow-config [:http :port] 9630)]
+          dashboard-port (resolve-shadow-env
+                           (get-in shadow-config [:http :port])
+                           9630)]
       (log/info (str "Shadow-cljs dashboard: http://localhost:" dashboard-port))
       (doseq [[id p] http-ports]
         (log/info (str "  " (name id) " dev server: http://localhost:" p)))))
@@ -541,8 +561,8 @@
 (defn print-summary
   "Print a colored startup summary."
   [ctx]
-  (let [label  (partial log/fg :green)
-        value  (partial log/fg :magenta)
+  (let [label (partial log/fg :green)
+        value (partial log/fg :magenta)
         header (partial log/fg :cyan)]
     (println)
     (println (header "========================================"))
